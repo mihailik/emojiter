@@ -1,4 +1,5 @@
 // @ts-check
+// @
 
 var emojiter = (function () {
   
@@ -35,6 +36,8 @@ var emojiter = (function () {
   function breakCategory(chCode) {
 
   }
+
+  var breakRanges = {};
 
   /**
    * Unicode point, taking account of pair surrogates.
