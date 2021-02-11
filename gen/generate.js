@@ -98,19 +98,27 @@ function processAndGenerateJS(text) {
     if (category.ranges.length > 1)
       str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
 
+    var prevSimpleNumber = false;
     for (var j = 0; j < category.ranges.length; j++) {
-      str += j ? ',\n' : category.ranges.length === 1 ? '' : '\n';
       var r = category.ranges[j];
+      var simpleNumber = !r.extra && !r.repeats;
+      str +=
+        prevSimpleNumber && simpleNumber ? (j ? ',' : '') :
+        j ? ',\n' : category.ranges.length === 1 ? '' : '\n';
+      
       var indent = category.ranges.length === 1 ? '' : '    ';
-      if (!r.extra && !r.repeats) {
-        str += indent + r.skip;
+      
+      if (simpleNumber) {
+        str += (prevSimpleNumber ? '' : indent) + r.skip;
+        prevSimpleNumber = true;
       }
       else {
+        prevSimpleNumber = false;
         if (r.repeats) {
-          str += indent + '[' + r.skip + ',' + r.extra + ', ' + r.repeats + ',' + r.spaced + ']';
+          str += indent + '[' + r.skip + ',' + (r.extra + 1) + ', ' + r.spaced + ',' + r.repeats + ']';
         }
         else {
-          str += indent + '[' + r.skip + ',' + r.extra + ']';
+          str += indent + '[' + r.skip + ',' + (r.extra + 1) + ']';
         }
       }
     }
@@ -177,7 +185,7 @@ function compactRanges(ranges) {
       if (prev && prev.extra === extra) {
         if (!prev.repeats || prev.spaced === skip) {
           prev.spaced = skip;
-          prev.repeats++;
+          prev.repeats = prev.repeats ? prev.repeats + 1 : 2;
           continue;
         }
       }
@@ -188,6 +196,21 @@ function compactRanges(ranges) {
         repeats: 0,
         spaced: 0
       });
+    }
+
+    // break unnecessary 2-repeats, retain when at least 3 in a row
+    for (var j = 0; j < comp.ranges.length; j++) {
+      var r = comp.ranges[j];
+      if (r.repeats === 2) {
+        comp.ranges.splice(j + 1, 0, {
+          skip: r.spaced,
+          extra: r.extra,
+          repeats: 0,
+          spaced: 0
+        });
+        r.repeats = 0;
+        r.spaced = 0;
+      }
     }
   }
 
