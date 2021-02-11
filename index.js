@@ -21,6 +21,7 @@ var emojiter = (function () {
 
     if (text) {
       for (var i = 0; i < text.length; i++) {
+        // TODO: get proper character code, adjust i if needed for multi-chars
         var chCode = text.charCodeAt(i);
       }
     }
@@ -34,9 +35,16 @@ var emojiter = (function () {
    * @param {number} chCode 
    */
   function breakCategory(chCode) {
-
+    // TODO: bisect through breakRanges
   }
 
+  /** @type {{
+   *    [breakCategory: string]: (
+   *      number // skip after last character
+   *      | ([skipAfterLastCharacter: number, countOfCharacters: number])
+   *      | ([skipAfterLastCharacter: number, countOfCharacters: number, spaceBetweenRepeatClusters: number, repeatClusterCount: number])
+   *    )[]
+   * }} */
   var breakRanges = {
   Prepend: [ // ARABIC NUMBER SIGN...MASARAM GONDI REPHA
     [1536,6],
@@ -378,7 +386,7 @@ var emojiter = (function () {
     [2737,5],
     [789537,96],
     [129,240]],
-  Regional: [[127462,26]], // undefined
+  Regional_Indicator: [[127462,26]], // REGIONAL INDICATOR SYMBOL LETTER A
   SpacingMark: [ // DEVANAGARI SIGN VISARGA...MUSICAL SYMBOL COMBINING AUGMENTATION DOT
     2307,56,
     [3,3],

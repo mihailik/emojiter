@@ -224,7 +224,7 @@ function parseGraphemeBreakPropertyFile(text) {
   var lines = text.split(/\r|\n/g);
   var ranges = [];
   for (let i = 0; i < lines.length; i++) {
-    var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z]+)(\s*#\s*[0-9a-z]+\s*(\[[0-9]+\]\s+)?([^\.]+)(\.\.([^.]+))?)?/i.exec(lines[i]);
+    var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z_]+)(\s*#\s*[0-9a-z_]+\s*(\[[0-9]+\]\s+)?([^\.]+)(\.\.([^.]+))?)?/i.exec(lines[i]);
     if (!match) continue;
 
     ranges.push({
