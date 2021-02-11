@@ -59,20 +59,25 @@ function parseAndProcess(file, callback) {
 
     var injectJS = processAndGenerateJS(data);
 
-    fs.readFile(/** @type {string} */(file), function (error, data) {
+    var targetFile = path.resolve(__dirname, '../index.js');
+
+    fs.readFile(targetFile, function (error, data) {
       if (error) return callback(error);
 
       var existingJS = data.toString('utf8');
       var matched = false;
+      var insertionPointRegExp = /(var breakRanges =\s*)([^;]+)(;)/gm;
       var updatedJS = existingJS.replace(
-        /(var breakingRanges =\s*)([^;]+)(;)/gm,
+        insertionPointRegExp,
         function (whole, lead, inner, trail) {
           matched = true;
           return lead + injectJS + trail;
         }
       );
 
-      fs.writeFile(/** @type {string} */(file), updatedJS, callback);
+      if (!matched) return callback(new Error('Insertion point ' + insertionPointRegExp + ' not found in ' + file));
+
+      fs.writeFile(targetFile, updatedJS, callback);
     });
   });
 }
@@ -88,30 +93,47 @@ function processAndGenerateJS(text) {
   var str = '{';
   for (var i = 0; i < compacted.length; i++) {
     var category = compacted[i];
-    str += i ? ',\n' : '\n';
-    str += '  ' + category.cat + ': [\n';
+    str += '\n  ' + category.cat + ': [';
+
+    if (category.ranges.length > 1)
+      str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+
     for (var j = 0; j < category.ranges.length; j++) {
-      str += j ? ',\n' : '\n';
+      str += j ? ',\n' : category.ranges.length === 1 ? '' : '\n';
       var r = category.ranges[j];
+      var indent = category.ranges.length === 1 ? '' : '    ';
       if (!r.extra && !r.repeats) {
-        str += '  ' + r.skip;
+        str += indent + r.skip;
       }
       else {
         if (r.repeats) {
-          str += '  [' + r.skip + ',' + r.extra + ', ' + r.repeats + ',' + r.spaced + ']';
+          str += indent + '[' + r.skip + ',' + r.extra + ', ' + r.repeats + ',' + r.spaced + ']';
         }
         else {
-          str += '  [' + r.skip + ',' + r.extra + ']';
+          str += indent + '[' + r.skip + ',' + r.extra + ']';
         }
       }
     }
-    str += ']';
+    str += ']' + (i === compacted.length - 1 ? '' : ',');
+    if (category.ranges.length === 1)
+      str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
   }
+  str += '\n}';
     
   return str;
 }
 
-/** @typedef {{ cat: string, ranges: { skip: number, extra: number, repeats: number, spaced: number }[]}} CompactedCategory */
+/** @typedef {{
+ *  cat: string,
+ *  nameStart: string;
+ *  nameEnd?: string;
+ *  ranges: {
+ *      skip: number,
+ *      extra: number, 
+ *      repeats: number, 
+ *      spaced: number
+ *  }[]
+ * }} CompactedCategory */
 
 /**
  * @param {ReturnType<typeof parseGraphemeBreakPropertyFile>} ranges
@@ -127,6 +149,7 @@ function compactRanges(ranges) {
     if (!catEntries) {
       catEntries = [];
       catList.push(catEntries);
+      byCat[ranges[i].cat] = catEntries;
     }
     catEntries.push(ranges[i]);
   }
@@ -140,12 +163,14 @@ function compactRanges(ranges) {
 
     // compact
     /** @type {CompactedCategory} */
-    var comp = { cat: catEntries[0].cat, ranges: [] };
+    var comp = { cat: catEntries[0].cat, nameStart: catEntries[0].name1, ranges: [] };
     compactedCategories.push(comp);
     var lastPos = 0;
     for (var j = 0; j < catEntries.length; j++) {
       var skip = catEntries[j].code1 - lastPos;
       var extra = catEntries[j].code2 ? catEntries[j].code2 - catEntries[j].code1 : 0;
+      if (j)
+        comp.nameEnd = catEntries[j].name2 || catEntries[j].name1;
       lastPos += skip + extra;
 
       var prev = comp.ranges.length && comp.ranges[comp.ranges.length - 1];
@@ -176,15 +201,15 @@ function parseGraphemeBreakPropertyFile(text) {
   var lines = text.split(/\r|\n/g);
   var ranges = [];
   for (let i = 0; i < lines.length; i++) {
-    var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z]+)/i.exec(lines[i]);
+    var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z]+)(\s*#\s*[0-9a-z]+\s*(\[[0-9]+\]\s+)?([^\.]+)(\.\.([^.]+))?)?/i.exec(lines[i]);
     if (!match) continue;
-    var code1 = match[1];
-    var code2 = match[3];
-    var cat = match[4];
+
     ranges.push({
-      code1: parseInt(code1, 16),
-      code2: code2 ? parseInt(code2, 16) : void 0,
-      cat: cat
+      code1: parseInt(match[1], 16),
+      code2: match[3] ? parseInt(match[3], 16) : void 0,
+      cat: match[4],
+      name1: match[7],
+      name2: match[9]
     });
   }
 
