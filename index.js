@@ -46,20 +46,20 @@ var emojiter = (function () {
    *    )[]
    * }} */
   var breakRanges = {
-  Prepend: [ // ARABIC NUMBER SIGN...MASARAM GONDI REPHA
+  Prepend: [ // \u0600 ARABIC NUMBER SIGN...MASARAM GONDI REPHA
     [1536,6],
     216,50,467,1132,66415,16,
     [245,2],
     1916,2,249,
     [74,6],
     701],
-  CR: [13], // <control-000D>
-  LF: [10], // <control-000A>
-  Control: [ // <control-0000>...<reserved-E0FFF>
+  CR: [13], // \x0D <CR>
+  LF: [10], // \x0A <LF>
+  Control: [ // \x00 <control-0000>...<reserved-E0FFF>
     [0,10],
     [2,2],
-    [2,18],
-    [96,33],
+    [2,18], // \x0E <control-000E>...<control-001F>
+    [96,33], // \x7F <control-007F>...<control-009F>
     14,1391,4594,2045,
     [3,2],
     25,1,
@@ -74,27 +74,27 @@ var emojiter = (function () {
     [34920,4],
     [5328,8],
     798342,1,
-    [1,30],
-    [97,128],
+    [1,30], // 0xE_0002 <reserved-E0002>...<reserved-E001F>
+    [97,128], // 0xE_0080 <reserved-E0080>...<reserved-E00FF>
     [241,3600]],
-  Extend: [ // COMBINING GRAVE ACCENT...VARIATION SELECTOR-256
-    [768,112],
+  Extend: [ // \u0300 COMBINING GRAVE ACCENT...VARIATION SELECTOR-256
+    [768,112], // \u0300 COMBINING GRAVE ACCENT...COMBINING LATIN SMALL LETTER X
     [276,5],
     [1,2],
-    [264,45],
+    [264,45], // \u0591 HEBREW ACCENT ETNAHTA...HEBREW POINT METEG
     2,
     [2,2],
     [2,2],
     2,
     [73,11],
-    [49,21],
+    [49,21], // \u064B ARABIC FATHATAN...ARABIC WAVY HAMZA BELOW
     17,
     [102,7],
     [3,6],
     [3,2],
     [2,4],
     36,
-    [31,27],
+    [31,27], // \u0730 SYRIAC PTHAHA ABOVE...SYRIAC BARREKH
     [92,11],
     [59,9],
     10,
@@ -104,7 +104,7 @@ var emojiter = (function () {
     [2,5],
     [44,3],
     [120,15],
-    [2,32],
+    [2,32], // \u08E3 ARABIC TURNED DAMMA BELOW...DEVANAGARI SIGN ANUSVARA
     56,2,
     [5,8],
     5,
@@ -161,12 +161,12 @@ var emojiter = (function () {
     [3,9],
     [12,6],
     [75,2],
-    [28,1, 2,3],
+    28,2,2,
     [56,14],
     [2,5],
     [2,2],
     [6,11],
-    [2,36],
+    [2,36], // \u0F99 TIBETAN SUBJOINED LETTER NYA...TIBETAN SUBJOINED LETTER FIXED-FORM RA
     10,
     [103,4],
     [2,6],
@@ -225,7 +225,7 @@ var emojiter = (function () {
     [2,7],
     5,7,
     [4,2],
-    [199,58],
+    [199,58], // \u1DC0 COMBINING DOTTED GRAVE ACCENT...COMBINING WIDE INVERTED BRIDGE BELOW
     [2,5],
     525,
     [196,13],
@@ -235,7 +235,7 @@ var emojiter = (function () {
     [1,12],
     [3071,3],
     142,
-    [97,32],
+    [97,32], // \u2DE0 COMBINING CYRILLIC LETTER BE...COMBINING CYRILLIC LETTER IOTIFIED BIG YUS
     [555,4],
     [1,2],
     [106,2],
@@ -248,7 +248,7 @@ var emojiter = (function () {
     [26,2],
     6,
     [152,2],
-    [27,18],
+    [27,18], // \uA8E0 COMBINING DEVANAGARI DIGIT ZERO...COMBINING DEVANAGARI SIGN AVAGRAHA
     14,
     [39,8],
     [26,11],
@@ -267,8 +267,8 @@ var emojiter = (function () {
     2,
     [43,2],
     9,239,3,5,20273,
-    [738,16],
-    [17,16],
+    [738,16], // \uFE00 VARIATION SELECTOR-1...VARIATION SELECTOR-16
+    [17,16], // \uFE20 COMBINING LIGATURE LEFT HALF...COMBINING CYRILLIC TITLO RIGHT HALF
     [367,2],
     606,227,
     [150,5],
@@ -344,7 +344,7 @@ var emojiter = (function () {
     [407,7],
     [2,6],
     2,
-    [83,22],
+    [83,22], // 0x1_1C92 MARCHEN SUBJOINED LETTER KA...MARCHEN SUBJOINED LETTER ZA
     [3,7],
     [2,2],
     [2,2],
@@ -369,13 +369,13 @@ var emojiter = (function () {
     [3,7],
     [31,4],
     [149,3],
-    [1980,55],
-    [5,50],
+    [1980,55], // 0x1_DA00 SIGNWRITING HEAD RIM...SIGNWRITING AIR SUCKING IN
+    [5,50], // 0x1_DA3B SIGNWRITING MOUTH CLOSED NEUTRAL...SIGNWRITING EXCITEMENT
     9,15,
     [23,5],
     [2,15],
     [1361,7],
-    [2,17],
+    [2,17], // 0x1_E008 COMBINING GLAGOLITIC LETTER ZEMLJA...COMBINING GLAGOLITIC LETTER HERU
     [3,7],
     [2,2],
     [2,5],
@@ -384,10 +384,10 @@ var emojiter = (function () {
     [1505,7],
     [110,7],
     [2737,5],
-    [789537,96],
+    [789537,96], // 0xE_0020 TAG SPACE...CANCEL TAG
     [129,240]],
-  Regional_Indicator: [[127462,26]], // REGIONAL INDICATOR SYMBOL LETTER A
-  SpacingMark: [ // DEVANAGARI SIGN VISARGA...MUSICAL SYMBOL COMBINING AUGMENTATION DOT
+  Regional_Indicator: [[127462,26]], // 0x1_F1E6 REGIONAL INDICATOR SYMBOL LETTER A
+  SpacingMark: [ // \u0903 DEVANAGARI SIGN VISARGA...MUSICAL SYMBOL COMBINING AUGMENTATION DOT
     2307,56,
     [3,3],
     [9,4],
@@ -456,7 +456,7 @@ var emojiter = (function () {
     [35628,2],
     3,
     [89,2],
-    [51,16],
+    [51,16], // \uA8B4 SAURASHTRA CONSONANT SIGN HAARU...SAURASHTRA VOWEL SIGN AU
     [143,2],
     48,
     [49,2],
@@ -518,21 +518,21 @@ var emojiter = (function () {
     [5,2],
     2,
     [351,2],
-    [20571,55],
+    [20571,55], // 0x1_6F51 MIAO SIGN ASPIRATION...MIAO VOWEL SIGN UI
     [105,2],
     24949,7],
-  L: [ // HANGUL CHOSEONG KIYEOK...HANGUL CHOSEONG SSANGYEORINHIEUH
-    [4352,96],
+  L: [ // \u1100 HANGUL CHOSEONG KIYEOK...HANGUL CHOSEONG SSANGYEORINHIEUH
+    [4352,96], // \u1100 HANGUL CHOSEONG KIYEOK...HANGUL CHOSEONG FILLER
     [38913,29]],
-  V: [ // HANGUL JUNGSEONG FILLER...HANGUL JUNGSEONG ARAEA-E
-    [4448,72],
+  V: [ // \u1160 HANGUL JUNGSEONG FILLER...HANGUL JUNGSEONG ARAEA-E
+    [4448,72], // \u1160 HANGUL JUNGSEONG FILLER...HANGUL JUNGSEONG O-YAE
     [50697,23]],
-  T: [ // HANGUL JONGSEONG KIYEOK...HANGUL JONGSEONG PHIEUPH-THIEUTH
-    [4520,88],
+  T: [ // \u11A8 HANGUL JONGSEONG KIYEOK...HANGUL JONGSEONG PHIEUPH-THIEUTH
+    [4520,88], // \u11A8 HANGUL JONGSEONG KIYEOK...HANGUL JONGSEONG SSANGNIEUN
     [50636,49]],
-  LV: [[44032,1, 28,399]], // HANGUL SYLLABLE GA...HANGUL SYLLABLE HI
-  LVT: [[44033,27, 2,399]], // HANGUL SYLLABLE GAG...HANGUL SYLLABLE HIH
-  ZWJ: [8205] // ZERO WIDTH JOINER
+  LV: [[44032,1, 28,399]], // \uAC00 HANGUL SYLLABLE GA...HANGUL SYLLABLE HI
+  LVT: [[44033,27, 2,399]], // \uAC01 HANGUL SYLLABLE GAG...HANGUL SYLLABLE HIH
+  ZWJ: [8205] // \u200D ZERO WIDTH JOINER
 };
 
   /**

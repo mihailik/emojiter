@@ -96,15 +96,16 @@ function processAndGenerateJS(text) {
     str += '\n  ' + category.cat + ': [';
 
     if (category.ranges.length > 1)
-      str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+      str += ' // ' + escapeHexChar(category.ranges[0].codeStart) + ' ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
 
     var prevSimpleNumber = false;
     for (var j = 0; j < category.ranges.length; j++) {
       var r = category.ranges[j];
       var simpleNumber = !r.extra && !r.repeats;
       str +=
-        prevSimpleNumber && simpleNumber ? (j ? ',' : '') :
-        j ? ',\n' : category.ranges.length === 1 ? '' : '\n';
+        prevSimpleNumber && simpleNumber ? '' :
+          category.ranges.length === 1 ? '' :
+            '\n';
       
       var indent = category.ranges.length === 1 ? '' : '    ';
       
@@ -121,14 +122,28 @@ function processAndGenerateJS(text) {
           str += indent + '[' + r.skip + ',' + (r.extra + 1) + ']';
         }
       }
+      if (j < category.ranges.length -1) {
+        str += ',';
+        if (r.extra >= 15) str += ' // ' + escapeHexChar(r.codeStart) + ' ' + r.nameStart + (!r.nameEnd ? '' : '...' + r.nameEnd);
+      }
     }
     str += ']' + (i === compacted.length - 1 ? '' : ',');
     if (category.ranges.length === 1)
-      str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+      str += ' // ' + escapeHexChar(category.ranges[0].codeStart) + ' ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
   }
   str += '\n}';
     
   return str;
+}
+
+/**
+ * @param {number} chCode
+ */
+function escapeHexChar(chCode) {
+  if (chCode <= 0xFF) return '\\x' + (0x100 + chCode).toString(16).slice(1).toUpperCase();
+  else if (chCode <= 0xFFFF) return '\\u' + (0x10000 + chCode).toString(16).slice(1).toUpperCase();
+  var hexStr = chCode.toString(16).toUpperCase();
+  return '0x' + hexStr.slice(0, hexStr.length - 4) + '_' + hexStr.slice(hexStr.length - 4);
 }
 
 /** @typedef {{
@@ -136,10 +151,13 @@ function processAndGenerateJS(text) {
  *  nameStart: string;
  *  nameEnd?: string;
  *  ranges: {
+ *      codeStart: number,
  *      skip: number,
  *      extra: number, 
  *      repeats: number, 
- *      spaced: number
+ *      spaced: number,
+ *      nameStart: string,
+ *      nameEnd?: string
  *  }[]
  * }} CompactedCategory */
 
@@ -174,43 +192,56 @@ function compactRanges(ranges) {
     var comp = { cat: catEntries[0].cat, nameStart: catEntries[0].name1, ranges: [] };
     compactedCategories.push(comp);
     var lastPos = 0;
+
     for (var j = 0; j < catEntries.length; j++) {
-      var skip = catEntries[j].code1 - lastPos;
-      var extra = catEntries[j].code2 ? catEntries[j].code2 - catEntries[j].code1 : 0;
+      var entry = catEntries[j];
+      var skip = entry.code1 - lastPos;
+      var extra = entry.code2 ? entry.code2 - entry.code1 : 0;
       if (j)
-        comp.nameEnd = catEntries[j].name2 || catEntries[j].name1;
+        comp.nameEnd = entry.name2 || entry.name1;
       lastPos += skip + extra;
 
       var prev = comp.ranges.length && comp.ranges[comp.ranges.length - 1];
       if (prev && prev.extra === extra) {
-        if (!prev.repeats || prev.spaced === skip) {
-          prev.spaced = skip;
-          prev.repeats = prev.repeats ? prev.repeats + 1 : 2;
-          continue;
+        if (prev.repeats) {
+          if (prev.spaced === skip) {
+            prev.repeats++;
+            prev.nameEnd = entry.name2 || entry.name1;
+            continue;
+          }
+        }
+        else if (prev.skip === skip) {
+          var expectRepeats = extra ? 3 : 5;
+
+          var prevBefore = prev;
+          for (var repeats = 2; repeats < expectRepeats; repeats++) {
+            if (prevBefore.skip !== skip) break;
+            prevBefore = comp.ranges.length >= repeats && comp.ranges[comp.ranges.length - repeats];
+            if (!prevBefore || prevBefore.extra !== extra || prevBefore.repeats) break;
+          }
+
+          if (repeats >= expectRepeats) {
+            prevBefore.repeats = repeats;
+            prevBefore.spaced = skip;
+            prevBefore.nameEnd = entry.name2 || entry.name1;
+
+            while (comp.ranges[comp.ranges.length - 1] !== prevBefore)
+              comp.ranges.pop();
+
+            continue;
+          }
         }
       }
 
       comp.ranges.push({
+        codeStart: entry.code1,
         skip: skip,
         extra: extra,
         repeats: 0,
-        spaced: 0
+        spaced: 0,
+        nameStart: entry.name1,
+        nameEnd: entry.name2
       });
-    }
-
-    // break unnecessary 2-repeats, retain when at least 3 in a row
-    for (var j = 0; j < comp.ranges.length; j++) {
-      var r = comp.ranges[j];
-      if (r.repeats === 2) {
-        comp.ranges.splice(j + 1, 0, {
-          skip: r.spaced,
-          extra: r.extra,
-          repeats: 0,
-          spaced: 0
-        });
-        r.repeats = 0;
-        r.spaced = 0;
-      }
     }
   }
 
@@ -224,19 +255,26 @@ function parseGraphemeBreakPropertyFile(text) {
   var lines = text.split(/\r|\n/g);
   var ranges = [];
   for (let i = 0; i < lines.length; i++) {
-    var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z_]+)(\s*#\s*[0-9a-z_]+\s*(\[[0-9]+\]\s+)?([^\.]+)(\.\.([^.]+))?)?/i.exec(lines[i]);
+    var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z_\-]+)(\s*#\s*[0-9a-z_\-]+\s*(\[[0-9]+\]\s+)?([^\.]+)(\.\.([^.]+))?)?/i.exec(lines[i]);
     if (!match) continue;
 
     ranges.push({
       code1: parseInt(match[1], 16),
       code2: match[3] ? parseInt(match[3], 16) : void 0,
       cat: match[4],
-      name1: match[7],
-      name2: match[9]
+      name1: prettifyNames(match[7]),
+      name2: prettifyNames(match[9])
     });
   }
 
   return ranges;
+}
+
+/**
+ * @param {string} nm
+ */
+function prettifyNames(nm) {
+  return nm && nm.replace(/control-000D/, 'CR').replace(/control-000A/, 'LF');
 }
 
 /**
