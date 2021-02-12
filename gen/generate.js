@@ -91,45 +91,67 @@ function processAndGenerateJS(text) {
   var compacted = compactRanges(ranges);
 
   var str = '{';
+  var lineStart = 0;
+  var idealLineLength = 130;
+  var afterLineComment = true;
   for (var i = 0; i < compacted.length; i++) {
     var category = compacted[i];
+    lineStart = str.length + 1;
     str += '\n  ' + category.cat + ': [';
 
-    if (category.ranges.length > 1)
-      str += ' // ' + escapeHexChar(category.ranges[0].codeStart) + ' ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+    if (category.ranges.length > 1) {
+      str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+      afterLineComment = true;
+    }
 
     var prevSimpleNumber = false;
     for (var j = 0; j < category.ranges.length; j++) {
       var r = category.ranges[j];
       var simpleNumber = !r.extra && !r.repeats;
-      str +=
-        prevSimpleNumber && simpleNumber ? '' :
-          category.ranges.length === 1 ? '' :
-            '\n';
+      var breakBefore =
+        prevSimpleNumber && simpleNumber ? false :
+          category.ranges.length === 1 ? false :
+            true;  
       
-      var indent = category.ranges.length === 1 ? '' : '    ';
+      if (breakBefore &&
+        !afterLineComment && str.length - lineStart < idealLineLength) breakBefore = false;
+
+      if (breakBefore) {
+        afterLineComment = false;
+        str += '\n';
+        lineStart = str.length;
+      }
+      
+      var indent = !breakBefore || category.ranges.length === 1 ? '' : '    ';
+
+      var skipOrCode = (j ? r.skip : '0x' + r.skip.toString(16).toUpperCase());
       
       if (simpleNumber) {
-        str += (prevSimpleNumber ? '' : indent) + r.skip;
+        str += (prevSimpleNumber ? '' : indent) + skipOrCode;
         prevSimpleNumber = true;
       }
       else {
         prevSimpleNumber = false;
         if (r.repeats) {
-          str += indent + '[' + r.skip + ',' + (r.extra + 1) + ', ' + r.spaced + ',' + r.repeats + ']';
+          str += indent + '[' + skipOrCode + ',' + (r.extra + 1) + ', ' + r.spaced + ',' + r.repeats + ']';
         }
         else {
-          str += indent + '[' + r.skip + ',' + (r.extra + 1) + ']';
+          str += indent + '[' + skipOrCode + ',' + (r.extra + 1) + ']';
         }
       }
       if (j < category.ranges.length -1) {
         str += ',';
-        if (r.extra >= 15) str += ' // ' + escapeHexChar(r.codeStart) + ' ' + r.nameStart + (!r.nameEnd ? '' : '...' + r.nameEnd);
+        // if (r.extra >= 15 && str.length - lineStart > idealLineLength * 0.65) {
+        //   str += ' // ' + escapeHexChar(r.codeStart) + ' ' + r.nameStart + (!r.nameEnd ? '' : '...' + r.nameEnd);
+        //   afterLineComment = true;
+        // }
       }
     }
     str += ']' + (i === compacted.length - 1 ? '' : ',');
-    if (category.ranges.length === 1)
-      str += ' // ' + escapeHexChar(category.ranges[0].codeStart) + ' ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+    if (category.ranges.length === 1) {
+      str += ' // ' + category.nameStart + (!category.nameEnd ? '' : '...' + category.nameEnd);
+      afterLineComment = true;
+    }
   }
   str += '\n}';
     
@@ -189,7 +211,13 @@ function compactRanges(ranges) {
 
     // compact
     /** @type {CompactedCategory} */
-    var comp = { cat: catEntries[0].cat, nameStart: catEntries[0].name1, ranges: [] };
+    var comp = {
+      cat: catEntries[0].cat,
+      nameStart: catEntries[0].name1,
+      nameEnd: catEntries.length === 1 ? catEntries[0].name2 :
+        catEntries[catEntries.length - 1].name2 || catEntries[catEntries.length - 1].name1,
+      ranges: []
+    };
     compactedCategories.push(comp);
     var lastPos = 0;
 
@@ -197,8 +225,6 @@ function compactRanges(ranges) {
       var entry = catEntries[j];
       var skip = entry.code1 - lastPos;
       var extra = entry.code2 ? entry.code2 - entry.code1 : 0;
-      if (j)
-        comp.nameEnd = entry.name2 || entry.name1;
       lastPos += skip + extra;
 
       var prev = comp.ranges.length && comp.ranges[comp.ranges.length - 1];
