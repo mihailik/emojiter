@@ -143,7 +143,7 @@ function escapeHexChar(chCode) {
   if (chCode <= 0xFF) return '\\x' + (0x100 + chCode).toString(16).slice(1).toUpperCase();
   else if (chCode <= 0xFFFF) return '\\u' + (0x10000 + chCode).toString(16).slice(1).toUpperCase();
   var hexStr = chCode.toString(16).toUpperCase();
-  return '0x' + hexStr.slice(0, hexStr.length - 4) + '_' + hexStr.slice(hexStr.length - 4);
+  return '0x0' + hexStr.slice(0, hexStr.length - 4) + '_' + hexStr.slice(hexStr.length - 4);
 }
 
 /** @typedef {{
