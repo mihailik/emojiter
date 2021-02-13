@@ -20,9 +20,12 @@ var emojiter = (function () {
     if (typeof textOffsetStart !== 'number') textOffsetStart = 0;
 
     if (text) {
-      for (var i = 0; i < text.length; i++) {
-        // TODO: get proper character code, adjust i if needed for multi-chars
-        var chCode = text.charCodeAt(i);
+      var pos = 0;
+      while (pos < text.length) {
+        var codePoint = codePointAt(text, pos);
+        var bcat = breakCategory(codePoint);
+
+        pos += codePoint ^ 0xFFFF ? 2 : 1; 
       }
     }
 
@@ -32,10 +35,41 @@ var emojiter = (function () {
   /**
    * Determine the break category of the character.
    * Aut-generated from https://www.unicode.org/Public/13.0.0/ucd/auxiliary/GraphemeBreakProperty.txt
-   * @param {number} chCode 
+   * @param {number} codePoint 
    */
-  function breakCategory(chCode) {
+  function breakCategory(codePoint) {
     // TODO: bisect through breakRanges
+  }
+
+  /**
+   * @param {typeof breakRanges} breakRanges
+   */
+  function unpackBreakRanges(breakRanges) {
+    /** @type {number[]} */
+    var ranges = [];
+    for (var cat in breakRanges) {
+      var catRanges = breakRanges[cat];
+      if (catRanges && Array.isArray(catRanges)) {
+        var code = 0;
+        for (var i = 0; i < catRanges.length; i++) {
+          var r = catRanges[i];
+          var skip = 0, count = 0, space = 0, repeats = 0;
+          if (typeof r === 'number') {
+            skip = r;
+            count = 1;
+          }
+          else {
+            skip = r[0];
+            count = r[1];
+            space = r[2];
+            repeats = r[3];
+          }
+          code += skip;
+          ranges.push(code);
+          ranges.push()
+        }
+      }
+    }
   }
 
   /** @type {{
