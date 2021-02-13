@@ -96,7 +96,7 @@ function processAndGenerateJS(text) {
 
   var str = '{';
   var lineStart = 0;
-  var idealLineLength = 130;
+  var idealLineLength = 140;
   var afterLineComment = true;
   for (var i = 0; i < compacted.length; i++) {
     var category = compacted[i];
@@ -232,6 +232,11 @@ function compactRanges(ranges) {
       lastPos += skip + 1+ extra;
 
       var prev = comp.ranges.length && comp.ranges[comp.ranges.length - 1];
+      if (prev && !skip && !prev.repeats) {
+        prev.extra += 1 + extra;
+        continue;
+      }
+
       if (prev && prev.extra === extra) {
         if (prev.repeats) {
           if (prev.spaced === skip) {
