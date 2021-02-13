@@ -66,12 +66,16 @@ function parseAndProcess(file, callback) {
 
       var existingJS = data.toString('utf8');
       var matched = false;
-      var insertionPointRegExp = /(var breakRanges =\s*)([^;]+)(;)/gm;
+      var insertionPointRegExp = /([\r\n])(\s*)(var breakRanges =\s*)([^;]+)(;)/gm;
       var updatedJS = existingJS.replace(
         insertionPointRegExp,
-        function (whole, lead, inner, trail) {
+        function (whole, newLine, indent, varAssign, value, semicolon) {
           matched = true;
-          return lead + injectJS + trail;
+          return (
+            newLine + indent + varAssign +
+            injectJS.split(/[\r\n]/g).join('\n' + indent) +
+            semicolon
+          );
         }
       );
 
@@ -225,7 +229,7 @@ function compactRanges(ranges) {
       var entry = catEntries[j];
       var skip = entry.code1 - lastPos;
       var extra = entry.code2 ? entry.code2 - entry.code1 : 0;
-      lastPos += skip + extra;
+      lastPos += skip + 1+ extra;
 
       var prev = comp.ranges.length && comp.ranges[comp.ranges.length - 1];
       if (prev && prev.extra === extra) {
@@ -280,7 +284,7 @@ function compactRanges(ranges) {
 function parseGraphemeBreakPropertyFile(text) {
   var lines = text.split(/\r|\n/g);
   var ranges = [];
-  for (let i = 0; i < lines.length; i++) {
+  for (var i = 0; i < lines.length; i++) {
     var match = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*\;\s*([0-9a-z_\-]+)(\s*#\s*[0-9a-z_\-]+\s*(\[[0-9]+\]\s+)?([^\.]+)(\.\.([^.]+))?)?/i.exec(lines[i]);
     if (!match) continue;
 
