@@ -7,9 +7,13 @@ var path = require('path');
 
 var urlGraphemeBreakPropertyDefaultPath = path.resolve(__dirname, urlGraphemeBreakProperty.split('/').slice(-1)[0]);
 
-
 if ((require.main || process.mainModule) === module) {
   handleCommandLineArgs();
+}
+else {
+  module.exports.parseGraphemeBreakPropertyFile = parseGraphemeBreakPropertyFile;
+  module.exports.urlGraphemeBreakProperty = urlGraphemeBreakProperty;
+  module.exports.urlGraphemeBreakPropertyDefaultPath = urlGraphemeBreakPropertyDefaultPath;
 }
 
 function handleCommandLineArgs() {
@@ -94,10 +98,12 @@ function processAndGenerateJS(text) {
   var ranges = parseGraphemeBreakPropertyFile(text);
   var compacted = compactRanges(ranges);
 
-  var str = '{';
+  var str = ''; // open curly bracket will be added there after the processing
   var lineStart = 0;
   var idealLineLength = 140;
   var afterLineComment = true;
+  var maxSkip = 0;
+  var maxRange = 0;
   for (var i = 0; i < compacted.length; i++) {
     var category = compacted[i];
     lineStart = str.length + 1;
@@ -111,11 +117,14 @@ function processAndGenerateJS(text) {
     var prevSimpleNumber = false;
     for (var j = 0; j < category.ranges.length; j++) {
       var r = category.ranges[j];
+      maxSkip = Math.max(maxSkip, r.skip);
+      maxRange = Math.max(maxRange, r.extra + 1);
+
       var simpleNumber = !r.extra && !r.repeats;
       var breakBefore =
         prevSimpleNumber && simpleNumber ? false :
           category.ranges.length === 1 ? false :
-            true;  
+            true;
       
       if (breakBefore &&
         !afterLineComment && str.length - lineStart < idealLineLength) breakBefore = false;
@@ -143,7 +152,7 @@ function processAndGenerateJS(text) {
           str += indent + '[' + skipOrCode + ',' + (r.extra + 1) + ']';
         }
       }
-      if (j < category.ranges.length -1) {
+      if (j < category.ranges.length - 1) {
         str += ',';
         // if (r.extra >= 15 && str.length - lineStart > idealLineLength * 0.65) {
         //   str += ' // ' + escapeHexChar(r.codeStart) + ' ' + r.nameStart + (!r.nameEnd ? '' : '...' + r.nameEnd);
@@ -158,7 +167,9 @@ function processAndGenerateJS(text) {
     }
   }
   str += '\n}';
-    
+
+  str = '{ // skip...' + maxSkip + ', range...' + maxRange + str;
+
   return str;
 }
 
@@ -228,17 +239,25 @@ function compactRanges(ranges) {
     for (var j = 0; j < catEntries.length; j++) {
       var entry = catEntries[j];
       var skip = entry.code1 - lastPos;
+      // extra is number of points minus 1
       var extra = entry.code2 ? entry.code2 - entry.code1 : 0;
-      lastPos += skip + 1+ extra;
+      lastPos += skip + 1 + extra;
 
       var prev = comp.ranges.length && comp.ranges[comp.ranges.length - 1];
       if (prev && !skip && !prev.repeats) {
+        // if two ranges are immediately side by side with no gap,
+        // and no repeating pattern caught already in prev
+        // -- merge the ranges
         prev.extra += 1 + extra;
         continue;
       }
 
       if (prev && prev.extra === extra) {
+        // possible repeating pattern
+
         if (prev.repeats) {
+          // if prev already has repeating pattern,
+          // can only continue with the same rhythm
           if (prev.spaced === skip) {
             prev.repeats++;
             prev.nameEnd = entry.name2 || entry.name1;
@@ -246,21 +265,26 @@ function compactRanges(ranges) {
           }
         }
         else if (prev.skip === skip) {
+          // if prev not yet repeating (enough)
           var expectRepeats = extra ? 3 : 5;
 
-          var prevBefore = prev;
+          var repeatStart = prev;
           for (var repeats = 2; repeats < expectRepeats; repeats++) {
-            if (prevBefore.skip !== skip) break;
-            prevBefore = comp.ranges.length >= repeats && comp.ranges[comp.ranges.length - repeats];
-            if (!prevBefore || prevBefore.extra !== extra || prevBefore.repeats) break;
+            // skip after candidate must fit the pattern
+            if (repeatStart.skip !== skip) break;
+
+            var repeatStartCandidate = comp.ranges.length >= repeats && comp.ranges[comp.ranges.length - repeats];
+
+            if (!repeatStartCandidate || repeatStartCandidate.repeats || repeatStartCandidate.extra !== extra) break;
+            repeatStart = repeatStartCandidate;
           }
 
           if (repeats >= expectRepeats) {
-            prevBefore.repeats = repeats;
-            prevBefore.spaced = skip;
-            prevBefore.nameEnd = entry.name2 || entry.name1;
+            repeatStart.repeats = repeats;
+            repeatStart.spaced = skip;
+            repeatStart.nameEnd = entry.name2 || entry.name1;
 
-            while (comp.ranges[comp.ranges.length - 1] !== prevBefore)
+            while (comp.ranges[comp.ranges.length - 1] !== repeatStart)
               comp.ranges.pop();
 
             continue;

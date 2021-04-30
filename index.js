@@ -2,6 +2,22 @@
 // @
 
 var emojiter = (function () {
+
+  var categoryKey = {
+    Prepend: 9,
+    Control: 0xC0,
+    CR: 0xD,
+    LF: 0xA,
+    Extend: 2,
+    Regional_Indicator: 4,
+    SpacingMark: 32,
+    L: 1,
+    V: 5,
+    T: 3,
+    LV: 15,
+    LVT: 153,
+    ZWJ: 100
+  };
   
   /**
    * Break the input text into individual graphemes,
@@ -40,18 +56,22 @@ var emojiter = (function () {
    * @param {number} codePoint 
    */
   function breakCategory(codePoint) {
+    if (!breakMap) breakMap = unpackBreakMap();
     var lo = 0;
-    var hi = breakMap.length;
+    var hi = breakMap.length / 2;
     while (true) {
-      var halfIndex = lo + ((hi-lo) / 2) % 2;
-      var start = breakMap[halfIndex];
-      var end = breakMap[halfIndex + 1];
-      
+      var halfIndex = lo + ((hi-lo) / 2) | 0;
+      var start = breakMap[halfIndex * 2];
+      var countAndKey = breakMap[halfIndex * 2 + 1];
+      var end = start + (countAndKey >> 8);
+      if (codePoint < start) hi = halfIndex;
+      else if (codePoint < end) return countAndKey & 0xFF;
+      else lo = halfIndex;
+      if (hi === lo) return 0; // 'other' category      
     }
   }
 
   function unpackBreakMap() {
-
     /** @type {{
      *    [breakCategory: string]: (
      *      number // skip after last character
@@ -59,7 +79,7 @@ var emojiter = (function () {
      *      | ([skipAfterLastCharacter: number, countOfCharacters: number, spaceBetweenRepeatClusters: number, repeatClusterCount: number])
      *    )[]
      * }} */
-    var breakRanges = {
+    var breakRanges = { // skip...798341, range...3600
       Prepend: [ // ARABIC NUMBER SIGN...MASARAM GONDI REPHA
         [0x600,6],215,49,466,1131,66414,15,[244,2],1915,1,248,[73,6],700],
       CR: [0xD], // <CR>
@@ -100,8 +120,8 @@ var emojiter = (function () {
       ZWJ: [0x200D] // ZERO WIDTH JOINER
     };
 
-    /** @type {number[]} */
-    var ranges = [];
+    /** @type {[number, number][]} */
+    var biRanges = [];
     for (var cat in breakRanges) {
       var catRanges = breakRanges[cat];
       if (catRanges && Array.isArray(catRanges)) {
@@ -120,22 +140,28 @@ var emojiter = (function () {
             repeats = r[3];
           }
           code += skip;
-          ranges.push(code);
-          ranges.push(count);
+          var countAndCat = (count << 8) | categoryKey[cat];
+          biRanges.push([code, countAndCat]);
           code += count;
           if (repeats) {
             for (var j = 1; j < repeats; j++) {
               code += space;
-              ranges.push(code);
-              ranges.push(count);
+              biRanges.push([code, countAndCat]);
               code += count;
             }
           }
         }
       }
     }
+    biRanges.sort(function (r1, r2) { return r1[0] - r2[0]; });
 
-    return typeof Uint32Array === 'undefined' || !Uint32Array ? ranges : new Uint32Array(ranges);
+    var ranges = typeof Uint32Array === 'undefined' || !Uint32Array ? /** @type {Uint32Array} */(/** @type {*} */([])) : new Uint32Array(biRanges.length * 2);
+    for (var i = 0; i < biRanges.length; i++) {
+      ranges[i * 2] = biRanges[i][0];
+      ranges[i * 2 + 1] = biRanges[i][1];
+    }
+
+    return ranges;
   }
 
   /** @type {number[] | Uint32Array} */
@@ -158,6 +184,12 @@ var emojiter = (function () {
     return chCode;
   }
 
+  emojiter.breakCategory = breakCategory;
+  emojiter.codePointAt = codePointAt;
+  emojiter.emojiter = emojiter;
+  emojiter.categoryKey = categoryKey;
+
+
   if (typeof module !== 'undefined' && module) {
     if ((require.main || process.mainModule) === /** @type {*} */(module)) {
       console.log('This file is not meant to run as a command line script (yet).')
@@ -171,9 +203,6 @@ var emojiter = (function () {
     WScript.Echo('This file is not meant to run in Windows Script Host (yet).');
   }
   else {
-    emojiter.breakCategory = breakCategory;
-    emojiter.codePointAt = codePointAt;
-    emojiter.emojiter = emojiter;
     return emojiter;
   }
 
