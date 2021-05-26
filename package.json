@@ -7,7 +7,7 @@
     "build": "node ./gen/generate.js genereate",
     "build:download": "node ./gen/generate.js download",
     "build:refresh": "node ./gen/generate.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node gen/test.js"
   },
   "repository": {
     "type": "git",

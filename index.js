@@ -34,16 +34,17 @@ var emojiter = (function () {
   function emojiter(text, pushable, textOffsetStart, textOffsetEnd) {
     var result = pushable || [];
     if (typeof textOffsetStart !== 'number') textOffsetStart = 0;
+    if (typeof textOffsetEnd !== 'number') textOffsetEnd = text.length;
 
     if (text) {
       if (!breakMap) breakMap = unpackBreakMap();
 
       var pos = 0;
-      while (pos < text.length) {
+      while (pos < textOffsetEnd) {
         var codePoint = codePointAt(text, pos);
         var bcat = breakCategory(codePoint);
 
-        pos += codePoint ^ 0xFFFF ? 2 : 1; 
+        pos += (codePoint >> 16) ? 2 : 1; 
       }
     }
 
