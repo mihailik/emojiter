@@ -67,8 +67,8 @@ var emojiter = (function () {
       var end = start + (countAndKey >> 8);
       if (codePoint < start) hi = halfIndex;
       else if (codePoint < end) return countAndKey & 0xFF;
-      else lo = halfIndex;
-      if (hi === lo) return 0; // 'other' category      
+      else lo = halfIndex + 1;
+      if (hi <= lo) return 0; // 'other' category      
     }
   }
 

@@ -10,9 +10,15 @@ function loadGraphemeBreaks() {
   return new Promise(function (resolve, reject) {
     fs.readFile(generate.urlGraphemeBreakPropertyDefaultPath, { encoding: 'utf8' },
       function (error, data) {
+        if (error) throw error;
+
         console.log('Loaded ' + data.length + ' chars...');
         var parsedBreaks = generate.parseGraphemeBreakPropertyFile(data);
         console.log('Parsed ' + parsedBreaks.length + ' break runs...');
+
+        // ASCII sanity test
+        parsedBreaks.push(
+          { cat: 'Other', code1: 32, code2: 126, name1: 'Space', name2: 'ch126~tilda' });
 
         var categoryReverseKey = { 0: 'Other' };
         for (var k in emojiter.categoryKey) {
