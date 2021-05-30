@@ -1,19 +1,24 @@
 // @ts-check
 
 var urlGraphemeBreakProperty = 'https://www.unicode.org/Public/13.0.0/ucd/auxiliary/GraphemeBreakProperty.txt';
+var urlEmojiSequences = 'https://unicode.org/Public/emoji/13.1/emoji-sequences.txt';
 
 var fs = require('fs');
 var path = require('path');
 
-var urlGraphemeBreakPropertyDefaultPath = path.resolve(__dirname, urlGraphemeBreakProperty.split('/').slice(-1)[0]);
+var graphemeBreakPropertyDefaultPath = path.resolve(__dirname, urlGraphemeBreakProperty.split('/').slice(-1)[0]);
+var emojiSequencesDefaultPath = path.resolve(__dirname, urlEmojiSequences.split('/').slice(-1)[0]);
 
 if ((require.main || process.mainModule) === module) {
   handleCommandLineArgs();
 }
 else {
+  parseGraphemeBreakPropertyFile.url = urlGraphemeBreakProperty;
+  parseGraphemeBreakPropertyFile.defaultPath = graphemeBreakPropertyDefaultPath;
   module.exports.parseGraphemeBreakPropertyFile = parseGraphemeBreakPropertyFile;
-  module.exports.urlGraphemeBreakProperty = urlGraphemeBreakProperty;
-  module.exports.urlGraphemeBreakPropertyDefaultPath = urlGraphemeBreakPropertyDefaultPath;
+  parseEmojiSequencesFile.url = urlEmojiSequences;
+  parseEmojiSequencesFile.defaultPath = emojiSequencesDefaultPath;
+  module.exports.parseEmojiSequencesFile = parseEmojiSequencesFile;
 }
 
 function handleCommandLineArgs() {
@@ -21,11 +26,11 @@ function handleCommandLineArgs() {
   var generateArg = process.argv.slice(1).some(function (arg) { return /^(\-+)?(g|gen|generate)$/i.test(arg); });
 
   if (downloadArg === generateArg) {
-    console.log('Downloading ' + urlGraphemeBreakProperty + ' to process into JS ...');
-    downloadGraphemeBreakPropertyToFile(function (error) {
+    console.log('Downloading ' + urlGraphemeBreakProperty + ' and ' + urlEmojiSequences + ' to process into JS ...');
+    downloadFiles(function (error) {
       if (error) return console.error(error);
-      console.log('Unicode details file is downloaded OK.');
-      console.log('Processing downloaded Unicode file into JS ...');
+      console.log('Files are downloaded OK.');
+      console.log('Processing downloaded files into JS ...');
       parseAndProcess(function (error) {
         if (error) return console.error(error);
         console.log('File is generated OK.');
@@ -33,14 +38,14 @@ function handleCommandLineArgs() {
     });
   }
   else if (downloadArg) {
-    console.log('Downloading ' + urlGraphemeBreakProperty + ' ...');
-    downloadGraphemeBreakPropertyToFile(function (error) {
+    console.log('Downloading ' + urlGraphemeBreakProperty + ' and ' + urlEmojiSequences + ' ...');
+    downloadFiles(function (error) {
       if (error) console.error(error);
-      else console.log('Unicode details file is downloaded OK.');
+      else console.log('Files are downloaded OK.');
     });
   }
   else {
-    console.log('Processing downloaded Unicode file into JS ...');
+    console.log('Processing downloaded files into JS ...');
     parseAndProcess(function (error) {
       if (error) return console.error(error);
       console.log('File is generated OK.');
@@ -55,7 +60,7 @@ function handleCommandLineArgs() {
 function parseAndProcess(file, callback) {
   if (!callback) {
     callback = /** @type {(error?: Error) => void} */(file);
-    file = urlGraphemeBreakPropertyDefaultPath;
+    file = graphemeBreakPropertyDefaultPath;
   }
 
   fs.readFile(/** @type {string} */(file), 'utf8', function (error, data) {
@@ -329,6 +334,28 @@ function parseGraphemeBreakPropertyFile(text) {
   return ranges;
 }
 
+function parseEmojiSequencesFile(text) {
+  var lines = text.split(/\r|\n/g);
+  var ranges = [];
+  for (var i = 0; i < lines.length; i++) {
+    var semicolonParts = lines[i].split(';');
+    var rangesParts = semicolonParts[0].replace(/\s\s+/g, ' ').replace(/^\s/, '').replace(/\s$/, '').split(/\s/g);
+    var name = semicolonParts[1].replace(/\s\s+/g, ' ').replace(/^\s/, '').replace(/\s$/, '');
+    
+    var firstCharMatch = /^\s*([0-9a-f]+)(\s*\.\.\s*([0-9a-f]+))?\s*/i.exec(rangesParts[0]);
+    if (!firstCharMatch) continue;
+
+    ranges.push({
+      code1: parseInt(firstCharMatch[1], 16),
+      code2: firstCharMatch[3] ? parseInt(firstCharMatch[3], 16) : void 0,
+      cat: 'Emoji',
+      name1: prettifyNames(name)
+    });
+  }
+
+  return ranges;
+}
+
 /**
  * @param {string} nm
  */
@@ -337,25 +364,57 @@ function prettifyNames(nm) {
 }
 
 /**
- * @param {(string | ((error?: Error) => void))=} file
- * @param {((error?: Error) => void)=} callback
+ * @param {((error?: Error) => void)} callback
  */
-function downloadGraphemeBreakPropertyToFile(file, callback) {
-  if (!callback) {
-    callback = /** @type {(error?: Error) => void} */(file);
-    file = urlGraphemeBreakPropertyDefaultPath;
+function downloadFiles(callback) {
+  var entries = [
+    { url: urlGraphemeBreakProperty, path: graphemeBreakPropertyDefaultPath },
+    { url: urlEmojiSequences, path: emojiSequencesDefaultPath }
+  ];
+  var downloadDone = 0;
+  var writeDone = 0;
+
+  for (var i = 0; i < entries.length; i++) {
+    download(i);
   }
 
-  downloadUrl(urlGraphemeBreakProperty, function (data) {
-    fs.writeFile(/** @type {string} */(file), data, function (error) {
-      callback(error);
+  function download(entryIndex) {
+    downloadUrl(entries[entryIndex].url, function (error, data) {
+      if (error) {
+        if (callback) callback(error);
+        callback = null;
+      }
+      else {
+        entries[entryIndex].data = data;
+        downloadDone++;
+        if (downloadDone === entries.length) {
+          for (var i = 0; i < entries.length; i++) {
+            write(i);
+          }
+        }
+      }
     });
-  });
+  }
+
+  function write(entryIndex) {
+    fs.writeFile(entries[entryIndex].path, entries[entryIndex].data, function (error) {
+      if (error) {
+        if (callback) callback(error);
+        callback = null;
+      }
+      else {
+        writeDone++;
+        if (writeDone === entries.length) {
+          callback();
+        }
+      }
+    });
+  }
 }
 
 /**
  * @param {string} url
- * @param {(data: Buffer) => void} callback 
+ * @param {(error: Error, data?: Buffer) => void} callback 
  */
 function downloadUrl(url, callback) {
   var http = /^https/i.test(url) ? require('https') : require('http');
@@ -363,15 +422,24 @@ function downloadUrl(url, callback) {
   http.get(url, function (res) {
     /** @type {Buffer[]} */
     var buffers = [];
+    res.on('error', function (error) {
+      if (callback) callback(error);
+      callback = null;
+    });
+
     res.on('data', function (data) {
       buffers.push(data);
     });
 
     res.on('end', function () {
       var data = Buffer.concat(buffers);
-      callback(data);
+      if (callback) callback(null, data);
+      callback = null;
     });
 
     res.read();
+  }).on('error', function (error) {
+    if (callback) callback(error);
+    callback = null;
   });
 }
