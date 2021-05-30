@@ -20,7 +20,7 @@ function loadGraphemeBreaks() {
         parsedBreaks.push(
           { cat: 'Other', code1: 32, code2: 126, name1: 'Space', name2: 'ch126~tilda' });
 
-        var categoryReverseKey = { 0: 'Other' };
+        var categoryReverseKey = {};
         for (var k in emojiter.categoryKey) {
           var v = emojiter.categoryKey[k];
           if (typeof v === 'number') categoryReverseKey[v] = k;
