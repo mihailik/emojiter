@@ -4,6 +4,7 @@
 var emojiter = (function () {
 
   var categoryKey = {
+    Other: 0,
     Prepend: 9,
     Control: 0xC0,
     CR: 0xD,
@@ -16,7 +17,7 @@ var emojiter = (function () {
     T: 3,
     LV: 15,
     LVT: 153,
-    ZWJ: 100
+    ZWJ: 100,
   };
   
   /**
@@ -26,29 +27,75 @@ var emojiter = (function () {
    * Whitespace or control characters are conidered each a separate grapheme too.
    * But CR+LF combination is considered a single grapheme.
    * @param {string} text
-   * @param {string[]=} pushable An optional receptacle array (but can be any object with a push method) - when omitted, an empty array will be created and returned.  
+   * @param {{push(str: string)}=} pushable An optional receptacle array (but can be any object with a push method) - when omitted, an empty array will be created and returned.  
    * @param {number=} textOffsetStart Character offset in input text to start, when omitted implied as zero.
    * @param {number=} textOffsetEnd Character offset in input text to end, when omitted means to iterate to the end of text.
    * @returns {string[]} Array of graphemes as individual strings. If pushable argument is provided, that same instance will be returned.
    */
   function emojiter(text, pushable, textOffsetStart, textOffsetEnd) {
-    var result = pushable || [];
     if (typeof textOffsetStart !== 'number') textOffsetStart = 0;
-    if (typeof textOffsetEnd !== 'number') textOffsetEnd = text.length;
+    if (typeof textOffsetEnd !== 'number') textOffsetEnd = text ? text.length : 0;
+    if (text && textOffsetEnd < textOffsetStart && !breakMap) breakMap = unpackBreakMap();
 
-    if (text) {
-      if (!breakMap) breakMap = unpackBreakMap();
+    var pushArray = pushable || [];
+    var start = 0;
+    var pos = 0;
+    var prevBcat = 0;
+    var graphemeCodepointCount = 0;
 
-      var pos = 0;
-      while (pos < textOffsetEnd) {
-        var codePoint = codePointAt(text, pos);
-        var bcat = breakCategory(codePoint);
+    while (pos < textOffsetEnd) {
+      var codePoint = codePointAt(text, pos);
+      var nextBcat = breakCategory(codePoint);
 
-        pos += (codePoint >> 16) ? 2 : 1; 
+      if (graphemeCodepointCount && expectBreak(prevBcat, nextBcat, graphemeCodepointCount)) {
+        var slice = text.slice(start, pos);
+        start = pos;
+
+        pushArray.push(text.slice(start, pos));
       }
+
+      pos += (codePoint >> 16) ? 2 : 1;
+      graphemeCodepointCount++;
     }
 
-    if (!pushable) return result;
+    if (!pushable) return /** @type {string[]} */(pushArray);
+  }
+
+  /**
+   * Break is needed between codepoints with break categories,
+   * See http://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries for the official rules (represented pretty exactly below).
+   * @param {number} prevBcat
+   * @param {number} nextBcat
+   * @param {number} graphemeCodepointCount
+   */
+  function expectBreak(prevBcat, nextBcat, graphemeCodepointCount) {
+    // Do not break between a CR and LF. Otherwise, break before and after controls.
+    if (prevBcat == 0xD /*CR*/ && nextBcat === 0xA /*LF*/) return false; // GB3 CR-LF
+    if (prevBcat == 0xC0 /*Control*/ || prevBcat == 0xD /*CR*/ || prevBcat === 0xA /*LF*/ ||
+      nextBcat == 0xC0 /*Control*/ || nextBcat == 0xD /*CR*/ || nextBcat === 0xA /*LF*/) return true; // GB4,5 (Control | CR | LF)x x(Control | CR | LF)
+    // Do not break Hangul syllable sequences.
+    if (prevBcat == 1 /*L*/ && (nextBcat == 1 /*L*/ || nextBcat == 5 /*V*/ || nextBcat === 15 /*LV*/ || nextBcat === 153 /*LVT*/)) return false; // GB6 Lx(L | V | LV | LVT)
+    if ((prevBcat == 15 /*LV*/ || prevBcat == 5 /*V*/) && (nextBcat == 5 /*V*/ || nextBcat === 3 /*T*/)) return false; // GB7 (LV | V)x(V | T)
+    if ((prevBcat == 153 /*LVT*/ || prevBcat == 3 /*T*/) && nextBcat === 3 /*T*/) return false; // GB8 (LVT | T)xT
+    // Do not break before extending characters or ZWJ.
+    if ((nextBcat === 2 /*Extend*/ || nextBcat === 100 /*ZWJ*/)) return true; // GB9 x(Extend | ZWJ)
+
+    // The GB9a and GB9b rules only apply to extended grapheme clusters:
+     // Do not break before SpacingMarks, or after Prepend characters.
+    if (nextBcat === 32 /*SpacingMk*/ || prevBcat === 9 /*Prepend*/) return false; // GB9a,b x(SpacingMark) (Prepend)x
+    
+    // Do not break within emoji modifier sequences or emoji zwj sequences (SIMPLIFIED INCOMPLETE HERE)
+    if (prevBcat === 100 /*ZWJ*/) return false;
+    
+    // Do not break within emoji flag sequences. That is, do not break between regional indicator (RI) symbols if there is an odd number of RI characters before the break point.
+    if (prevBcat == 4 /*Reg.Ind*/ && nextBcat === 4 /*Reg.Ind*/) return graphemeCodepointCount === 1 ? false : true; // GB 12,13
+    return true;
+  }
+
+  function isEmoji(codePoint) {
+    if (codePoint >= 0x1F000 && codePoint <= 0x1FAFF) return true;
+    if (codePoint >= 0x1FC00 && codePoint <= 0x1FFFD) return true;
+    return false;
   }
 
   /**
@@ -58,22 +105,30 @@ var emojiter = (function () {
    */
   function breakCategory(codePoint) {
     if (!breakMap) breakMap = unpackBreakMap();
+    // bisect
     var lo = 0;
     var hi = breakMap.length / 2;
     while (true) {
-      var halfIndex = lo + ((hi-lo) / 2) | 0;
-      var start = breakMap[halfIndex * 2];
-      var countAndKey = breakMap[halfIndex * 2 + 1];
+      var midIndex = lo + ((hi-lo) / 2) | 0;
+      var start = breakMap[midIndex * 2];
+      var countAndKey = breakMap[midIndex * 2 + 1];
       var end = start + (countAndKey >> 8);
-      if (codePoint < start) hi = halfIndex;
+      if (codePoint < start) hi = midIndex;
       else if (codePoint < end) return countAndKey & 0xFF;
-      else lo = halfIndex + 1;
+      else lo = midIndex + 1;
       if (hi <= lo) return 0; // 'other' category      
     }
   }
 
+  /**
+   * Converts succint break map into flat bisect-searchable Uint32Array encoding ordered ranges into numbers.
+   * Each range is encoded as 2 numbers: `start` and bit-packed ()`count` and `key`): low 8 bits are `key` and the rest is `count`.
+   */
   function unpackBreakMap() {
-    /** @type {{
+    /**
+     * Set of of Unicode ranges for a break category.
+     * Range can be: a single codepoint (denoted by skip since the last), [start,count] range, or repeating range [start, count, spacing, repeat-count]
+     * @type {{
      *    [breakCategory: string]: (
      *      number // skip after last character
      *      | ([skipAfterLastCharacter: number, countOfCharacters: number])
