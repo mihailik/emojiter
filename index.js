@@ -248,6 +248,27 @@ var emojiter = (function () {
 
   if (typeof module !== 'undefined' && module) {
     if ((require.main || process.mainModule) === /** @type {*} */(module)) {
+
+      const readline = require("readline");
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      runInteractive('Text: ', function())
+
+      rl.question("What is your name ? ", function (name) {
+        rl.question("Where do you live ? ", function (country) {
+          console.log(`${name}, is a citizen of ${country}`);
+          rl.close();
+        });
+      });
+
+      rl.on("close", function () {
+        console.log("\nBYE BYE !!!");
+        process.exit(0);
+      });
+
       console.log('This file is not meant to run as a command line script (yet).')
     }
     else {
@@ -260,6 +281,36 @@ var emojiter = (function () {
   }
   else {
     return emojiter;
+  }
+
+  function runInteractive(read, write) {
+    continueReading();
+
+    function handleRead(str) {
+      var chunks = emojiter(str);
+      for (var i = 0; i < chunks.length; i++) {
+        var ch = chunks[i];
+        var formattedChunk = '';
+        for (var j = 0; j < ch.length; j++) {
+          if (ch.charCodeAt(j) > 32 && ch.charCodeAt(j) < 128) formattedChunk += ' {' + ch.charAt(j) + '}';
+          else formattedChunk += ' \\u' + ch.charCodeAt(j).toString(16).toUpperCase();
+        }
+        write(formattedChunk);
+      }
+    }
+
+    function handleReadAsync(str) {
+      handleRead(str);
+      continueReading();
+    }
+
+    function continueReading() {
+      while (true) {
+        var readResult = read(handleReadAsync);
+        if (!readResult) return;
+        handleRead(readResult);
+      }
+    }
   }
 
 })();
