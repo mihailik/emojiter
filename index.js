@@ -250,16 +250,11 @@ var emojiter = (function () {
 
   if (typeof module !== 'undefined' && module) {
     if ((require.main || process.mainModule) === /** @type {*} */(module)) {
-
-      var readline = require("readline");
-      var rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
+      var rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
       runInteractive(
         function (callback) { rl.question('', callback); },
-        function (str) { rl.write(str); });
+        function (str) { rl.write(str); },
+        function() {rl.close(); });
     }
     else {
       module.exports = emojiter;
@@ -267,20 +262,18 @@ var emojiter = (function () {
   }
   else if (typeof WScript !== 'undefined' && WScript) {
     if (/cscript(\.exe)?$/.test(WScript.FullName)) {
+      var callbacks = []; // flatten recursion
       runInteractive(
-        function () { return WScript.StdIn.ReadLine(); },
-        function (str) { WScript.StdOut.Write(str); }
+        function (callback) { callbacks.push(callback); },
+        function (str) { WScript.StdOut.Write(str); },
+        function() {}
       );
+      while (callbacks.length) {
+        callbacks.shift()(WScript.StdIn.ReadLine());
+      }
     }
-    else {
-      var vbhost = WScript.CreateObject('MSScriptControl.ScriptControl');
-      vbhost.Language = 'VBScript';
-      vbhost.AllowUI = true;
-      vbhost.TimeOut = 60 * 60 * 1000;
-      runInteractive(
-        function () { return vbhost.Eval("InputBox('')"); },
-        function (str) { WScript.Echo(str); }
-      );
+    else { // restart with CSCRIPT
+      WScript.CreateObject('WScript.Shell').Run('cscript "' + WScript.ScriptFullName + '"');
     }
   }
   else {
@@ -289,47 +282,38 @@ var emojiter = (function () {
 
   /**
    * @param {(callback: (str: string) => void) => (void | string)} read
-   * @param {(str: string)=> void} write
+   * @param {(str: string) => void} write
+   * @param {() => void} close
    */
-  function runInteractive(read, write) {
-    write('Splitting strings in Unicode graphemes\n');
-    continueReading();
+  function runInteractive(read, write, close) {
+    write('Splitting strings in Unicode graphemes. Please type below:\n');
+    read(handleRead);
 
     /**
      * @param {string} str
      */
     function handleRead(str) {
+      if (!str) {
+        write('Done.');
+        close();
+        return;
+      }
+
       var chunks = emojiter(str);
-      var formatted = '';
+      var formatted = ' [' + str.length + '] character' + (str.length === 1 ? '' : 's') + ' -> [' + chunks.length + '] grapheme' + (chunks.length === 1 ? '' : 's') + ': ';
       for (var i = 0; i < chunks.length; i++) {
         var ch = chunks[i];
         formatted += i ? ' [' : '[';
         for (var j = 0; j < ch.length; j++) {
           formatted += j ? ' ' : '';
           if (ch.charCodeAt(j) > 32 && ch.charCodeAt(j) < 128) formatted += '{' + ch.charAt(j) + '}';
-          else formatted += '\\u' + ch.charCodeAt(j).toString(16).toUpperCase();
+          else formatted += '\\u' + (0x10000 + ch.charCodeAt(j)).toString(16).slice(1).toUpperCase();
         }
         formatted += ']';
       }
 
-      write('Input[' + str.length + '], result[' + chunks.length + ']: ' + formatted + '\n');
-    }
-
-    /**
-     * @param {string} str
-     */
-    function handleReadAsync(str) {
-      if (!str) return;
-      handleRead(str);
-      continueReading();
-    }
-
-    function continueReading() {
-      while (true) {
-        var readResult = read(handleReadAsync);
-        if (!readResult) return;
-        handleRead(readResult);
-      }
+      write(formatted + '\n');
+      read(handleRead);
     }
   }
 
