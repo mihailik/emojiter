@@ -51,12 +51,14 @@ var emojiter = (function () {
         var slice = text.slice(start, pos);
         start = pos;
 
-        pushArray.push(text.slice(start, pos));
+        pushArray.push(slice);
       }
 
       pos += (codePoint >> 16) ? 2 : 1;
       graphemeCodepointCount++;
     }
+
+    if (pos > start) pushArray.push(text.slice(start));
 
     if (!pushable) return /** @type {string[]} */(pushArray);
   }
@@ -255,50 +257,68 @@ var emojiter = (function () {
         output: process.stdout
       });
 
-      runInteractive('Text: ', function())
-
-      rl.question("What is your name ? ", function (name) {
-        rl.question("Where do you live ? ", function (country) {
-          console.log(`${name}, is a citizen of ${country}`);
-          rl.close();
+      runInteractive(
+        function (callback) {
+          rl.question('', callback);
+        },
+        function (str) {
+          rl.write(str);
         });
-      });
 
-      rl.on("close", function () {
-        console.log("\nBYE BYE !!!");
-        process.exit(0);
-      });
-
-      console.log('This file is not meant to run as a command line script (yet).')
+      // rl.on("close", function () {
+      //   console.log('\n');
+      //   process.exit(0);
+      // });
     }
     else {
       module.exports = emojiter;
     }
   }
   else if (typeof WScript !== 'undefined' && WScript) {
-    // TODO: read from input and print out in neat way, for testing
-    WScript.Echo('This file is not meant to run in Windows Script Host (yet).');
+    runInteractive(
+      function () {
+        return WScript.StdIn.ReadLine();
+      },
+      function (str) {
+        WScript.StdOut.Write(str);
+      }
+    );
   }
   else {
     return emojiter;
   }
 
+  /**
+   * @param {(callback: (str: string) => void) => (void | string)} read
+   * @param {(str: string)=> void} write
+   */
   function runInteractive(read, write) {
+    write('Splitting strings in Unicode graphemes\n');
     continueReading();
 
+    /**
+     * @param {string} str
+     */
     function handleRead(str) {
       var chunks = emojiter(str);
+      var formatted = '';
       for (var i = 0; i < chunks.length; i++) {
         var ch = chunks[i];
-        var formattedChunk = '';
+        formatted += i ? ' [' : '[';
         for (var j = 0; j < ch.length; j++) {
-          if (ch.charCodeAt(j) > 32 && ch.charCodeAt(j) < 128) formattedChunk += ' {' + ch.charAt(j) + '}';
-          else formattedChunk += ' \\u' + ch.charCodeAt(j).toString(16).toUpperCase();
+          formatted += j ? ' ' : '';
+          if (ch.charCodeAt(j) > 32 && ch.charCodeAt(j) < 128) formatted += '{' + ch.charAt(j) + '}';
+          else formatted += '\\u' + ch.charCodeAt(j).toString(16).toUpperCase();
         }
-        write(formattedChunk);
+        formatted += ']';
       }
+
+      write('Input[' + str.length + '], result[' + chunks.length + ']: ' + formatted + '\n');
     }
 
+    /**
+     * @param {string} str
+     */
     function handleReadAsync(str) {
       handleRead(str);
       continueReading();
