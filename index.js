@@ -17,7 +17,7 @@ var emojiter = (function () {
     T: 3,
     LV: 15,
     LVT: 153,
-    ZWJ: 100,
+    ZWJ: 100
   };
   
   /**
@@ -182,7 +182,7 @@ var emojiter = (function () {
     var biRanges = [];
     for (var cat in breakRanges) {
       var catRanges = breakRanges[cat];
-      if (catRanges && Array.isArray(catRanges)) {
+      if (catRanges && catRanges.length) {
         var code = 0;
         for (var i = 0; i < catRanges.length; i++) {
           var r = catRanges[i];
@@ -251,38 +251,37 @@ var emojiter = (function () {
   if (typeof module !== 'undefined' && module) {
     if ((require.main || process.mainModule) === /** @type {*} */(module)) {
 
-      const readline = require("readline");
-      const rl = readline.createInterface({
+      var readline = require("readline");
+      var rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
       });
 
       runInteractive(
-        function (callback) {
-          rl.question('', callback);
-        },
-        function (str) {
-          rl.write(str);
-        });
-
-      // rl.on("close", function () {
-      //   console.log('\n');
-      //   process.exit(0);
-      // });
+        function (callback) { rl.question('', callback); },
+        function (str) { rl.write(str); });
     }
     else {
       module.exports = emojiter;
     }
   }
   else if (typeof WScript !== 'undefined' && WScript) {
-    runInteractive(
-      function () {
-        return WScript.StdIn.ReadLine();
-      },
-      function (str) {
-        WScript.StdOut.Write(str);
-      }
-    );
+    if (/cscript(\.exe)?$/.test(WScript.FullName)) {
+      runInteractive(
+        function () { return WScript.StdIn.ReadLine(); },
+        function (str) { WScript.StdOut.Write(str); }
+      );
+    }
+    else {
+      var vbhost = WScript.CreateObject('MSScriptControl.ScriptControl');
+      vbhost.Language = 'VBScript';
+      vbhost.AllowUI = true;
+      vbhost.TimeOut = 60 * 60 * 1000;
+      runInteractive(
+        function () { return vbhost.Eval("InputBox('')"); },
+        function (str) { WScript.Echo(str); }
+      );
+    }
   }
   else {
     return emojiter;
@@ -320,6 +319,7 @@ var emojiter = (function () {
      * @param {string} str
      */
     function handleReadAsync(str) {
+      if (!str) return;
       handleRead(str);
       continueReading();
     }
